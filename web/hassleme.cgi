@@ -63,21 +63,6 @@ sub hassle_header {
         );
     }
 
-print <<EOF;
-<div class="retirement-banner retirement-banner--hassleme">
-  <div class="retirement-banner__inner">
-    <a class="retirement-banner__logo" href="https://www.mysociety.org/">mySociety</a>
-    <p class="retirement-banner__description">
-        HassleMe is changing!
-    </p>
-    <p class="retirement-banner__description">
-        During the transition period until 12th March, creation of new hassles is disabled.
-        But you can still browse existing ones.
-        <a class="retirement-banner__more" href="/T/TCs">Find out more!</a></p>
-  </div>
-</div>
-EOF
-
     print $q->h1($q->a({href=>'/'},"HassleMe"),
 #                 $q->span({-id=>'betaTest'},
 #                        'Beta Test'),
