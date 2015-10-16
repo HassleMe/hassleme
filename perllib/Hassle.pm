@@ -18,8 +18,11 @@ use mySociety::Email;
 use mySociety::HandleMail;
 use mySociety::EmailUtil;
 use POSIX qw();
+use Net::DNS;
+use Email::Sender::Simple;
+use Email::Simple;
 
-use mySociety::Config;
+our %CONFIG;
 
 BEGIN {
     use Exporter ();
@@ -30,14 +33,15 @@ BEGIN {
 
 sub dbh () {
     our $dbh;
+    # use Data::Dumper; die Dumper(\%CONFIG);
     if (!$dbh) {
         $dbh ||= DBI->connect(
-                        "dbi:Pg:dbname=" . mySociety::Config::get('HM_DB_NAME')
-                        . ";host=" . mySociety::Config::get('HM_DB_HOST')
-                        . ";port=" . mySociety::Config::get('HM_DB_PORT')
+                        "dbi:Pg:dbname=" . $CONFIG{HM_DB_NAME}
+                        . ";host=" . $CONFIG{HM_DB_HOST}
+                        . ";port=" . $CONFIG{HM_DB_PORT}
                         . ";sslmode=allow",
-                        mySociety::Config::get('HM_DB_USER'),
-                        mySociety::Config::get('HM_DB_PASS'),
+                        $CONFIG{HM_DB_USER},
+                        $CONFIG{HM_DB_PASS},
                         {
                             AutoCommit => 0,
                             PrintError => 0,
@@ -68,8 +72,8 @@ Get the bounced address from a VERP address created with verp_envelope_sender
 =cut
 sub get_bounced_address($){
     my ($address) = @_;
-    my $prefix =  mySociety::Config::get('EMAIL_PREFIX');
-    my $domain =  mySociety::Config::get('EMAIL_DOMAIN');
+    my $prefix =  $CONFIG{EMAIL_PREFIX};
+    my $domain =  $CONFIG{EMAIL_DOMAIN};
     my $bounced_address =  mySociety::HandleMail::get_bounced_address($address, $prefix, $domain);
     return $bounced_address;
 }
@@ -84,8 +88,8 @@ sub verp_envelope_sender($){
     # strip whitespace
     $recipient =~ s/^\s+//;
     $recipient =~ s/\s+$//;
-    my $prefix =  mySociety::Config::get('EMAIL_PREFIX');
-    my $domain =  mySociety::Config::get('EMAIL_DOMAIN');
+    my $prefix =  $CONFIG{EMAIL_PREFIX};
+    my $domain =  $CONFIG{EMAIL_DOMAIN};
     my $envelope_sender = mySociety::HandleMail::verp_envelope_sender($recipient, $prefix, $domain);
     return $envelope_sender
 }
@@ -100,42 +104,21 @@ sub sendmail ($$$) {
     my ($to, $subject, $text) = @_;
 
     # Add a signature to the body.
-    $weburl = mySociety::Config::get('WEBURL');
+    $weburl = $CONFIG{WEBURL};
     $text .= <<EOF;
 --
 $weburl/
 EOF
 
-    # Quoted-printable encoding of the subject.
-    if ($subject =~ /[\x00-\x1f\x80-\xff]/) {
-        $subject =~ s/([\x00-\x20\x80-\xff])/sprintf('=%02x', ord($1))/ge;
-        $subject = "=?UTF-8?Q?$subject?=";
-    }
-
-    # Create a VERP envelope sender
-    my $sender = verp_envelope_sender($to);
-
-    # Generate a message-ID.
-    my $msgid = sprintf('<%08x%0xf@hassleme.co.uk>',
-                        int(rand(0xffffffff)), int(rand(0xffffffff)));
-
-    my $mail = mySociety::Email::construct_email({
-        _unwrapped_body_ => $text,
-        _line_indent => '',
-        From => ['hassle@hassleme.co.uk', 'HassleBot'],
-        Subject => $subject,
-        To => $to,
-        'Message-ID' => $msgid,
-    });
-
-    my $result = mySociety::EmailUtil::send_email($mail, $sender, $to);
-    if ($result == mySociety::EmailUtil::EMAIL_SUCCESS) {
-
-    } elsif ($result == mySociety::EmailUtil::EMAIL_SOFT_ERROR) {
-        die "soft error delivering message by email to $to";
-    } else {
-        die "hard error delivering message by email to $to";
-    }
+    my $mail = Email::Simple->create(
+        header => [
+            To => $to,
+            From => '"HassleBot" <hassle@hassleme.co.uk>',
+            Subject => $subject,
+        ],
+        body => $text
+    );
+    Email::Sender::Simple->send($mail);
 }
 
 =item token ID
